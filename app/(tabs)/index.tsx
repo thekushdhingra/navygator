@@ -1,75 +1,162 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { AntDesign, Entypo, Feather, Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useCallback, useRef, useState } from "react";
+import {
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Menu, Provider } from "react-native-paper";
+import { WebView } from "react-native-webview";
+import { useAppTheme } from "../theme-context";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+export default function Home() {
+  const router = useRouter();
+  const [input, setInput] = useState("");
+  const [url, setUrl] = useState("https://www.google.com");
+  const webviewRef = useRef<WebView>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const { theme } = useAppTheme();
 
-export default function HomeScreen() {
+  const handleGo = () => {
+    let formattedUrl = input.trim();
+    if (!formattedUrl.startsWith("http")) {
+      formattedUrl = `https://www.google.com/search?q=${encodeURIComponent(
+        formattedUrl
+      )}`;
+    }
+    setUrl(formattedUrl);
+    setInput(formattedUrl);
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    webviewRef.current?.reload();
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <Provider>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      >
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ flex: 1 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            <WebView
+              ref={webviewRef}
+              sharedCookiesEnabled
+              thirdPartyCookiesEnabled
+              onNavigationStateChange={(navState) => setInput(navState.url)}
+              source={{ uri: url }}
+              style={{ flex: 1, marginTop: 18 }}
+              pullToRefreshEnabled
+            />
+          </ScrollView>
+
+          <View
+            style={[
+              styles.navBar,
+              { backgroundColor: theme.colors.background },
+            ]}
+          >
+            <TouchableOpacity onPress={() => setUrl("https://www.google.com")}>
+              <AntDesign name="home" size={24} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+
+            <View
+              style={[styles.urlBar, { backgroundColor: theme.colors.surface }]}
+            >
+              <Ionicons
+                name="search"
+                size={20}
+                color={theme.colors.onSurface}
+                style={{ marginHorizontal: 8 }}
+              />
+              <TextInput
+                style={[styles.input, { color: theme.colors.onSurface }]}
+                placeholder="Search or enter URL"
+                placeholderTextColor={theme.colors.onSurface}
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={handleGo}
+              />
+              {input && (
+                <TouchableOpacity onPress={handleGo}>
+                  <Feather
+                    name="arrow-right"
+                    size={24}
+                    color={theme.colors.onSurface}
+                    style={{ marginHorizontal: 8 }}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Menu
+              visible={menuVisible}
+              onDismiss={closeMenu}
+              anchor={
+                <TouchableOpacity onPress={openMenu}>
+                  <Entypo
+                    name="dots-three-horizontal"
+                    size={20}
+                    color={theme.colors.onSurface}
+                  />
+                </TouchableOpacity>
+              }
+            >
+              <Menu.Item
+                onPress={() => {
+                  closeMenu();
+                  router.push("/settings");
+                }}
+                title="Settings"
+                leadingIcon="cog-outline"
+              />
+            </Menu>
+          </View>
+        </View>
+      </SafeAreaView>
+    </Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  urlBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 8,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    width: "80%",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  input: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    fontSize: 14,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  navBar: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+    paddingBottom: 10,
   },
 });
