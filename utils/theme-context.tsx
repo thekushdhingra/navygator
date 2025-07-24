@@ -5,9 +5,8 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useColorScheme } from "react-native";
 
-type ThemeMode = "light" | "dark" | "system" | "custom";
+type ThemeMode = "light" | "dark" | "custom";
 
 type CustomTheme = {
   primary?: string;
@@ -76,24 +75,18 @@ const ThemeContext = createContext<ThemeContextType>({
   setAccent: (_: string) => {},
   setThemeMode: (_: ThemeMode) => {},
   setCustomTheme: (_: CustomTheme) => {},
-  mode: "system",
+  mode: "dark",
   accentColor: Dark.colors.accent,
 });
 
 export const useAppTheme = () => useContext(ThemeContext);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemColorScheme = useColorScheme();
-  const [mode, setMode] = useState<ThemeMode>("system");
-  const [accentColor, setAccentColor] = useState<string>(
-    systemColorScheme === "dark" ? Dark.colors.accent : Light.colors.accent
-  );
+  const [mode, setMode] = useState<ThemeMode>("dark");
+  const [accentColor, setAccentColor] = useState<string>(Dark.colors.accent);
   const [customTheme, setCustomThemeState] = useState<CustomTheme>({});
 
-  const effectiveMode =
-    mode === "system" ? systemColorScheme : mode === "custom" ? "light" : mode;
-
-  const baseTheme = effectiveMode === "dark" ? Dark : Light;
+  const baseTheme = mode === "dark" ? Dark : Light;
 
   useEffect(() => {
     if (mode !== "custom") {

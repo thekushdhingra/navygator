@@ -10,21 +10,14 @@ import {
   View,
 } from "react-native";
 import ColorPicker from "react-native-wheel-color-picker";
-import { useAppTheme } from "../theme-context";
+import { useAppTheme } from "../../utils/theme-context";
 
 export default function Settings() {
   const router = useRouter();
   const { setAccent, setCustomTheme, setTheme, accentColor, theme, mode } =
     useAppTheme();
 
-  const [themeMode, setThemeMode] = useState<"light" | "dark" | "custom">(
-    mode === "system"
-      ? theme.dark
-        ? "dark"
-        : "light"
-      : (mode as "light" | "dark" | "custom")
-  );
-
+  const [themeMode, setThemeMode] = useState<"light" | "dark" | "custom">(mode);
   const [primaryColor, setPrimaryColor] = useState(theme.colors.primary);
   const [backgroundColor, setBackgroundColor] = useState(
     theme.colors.background
@@ -42,9 +35,18 @@ export default function Settings() {
     setTheme("custom");
   };
 
-  const handleThemeChange = (mode: "light" | "dark" | "custom") => {
-    setThemeMode(mode);
-    setTheme(mode);
+  const handleThemeChange = (selectedMode: "light" | "dark" | "custom") => {
+    setThemeMode(selectedMode);
+    setTheme(selectedMode);
+
+    if (selectedMode === "custom") {
+      // Pre-fill current theme colors into state
+      setPrimaryColor(theme.colors.primary);
+      setBackgroundColor(theme.colors.background);
+      setSurfaceColor(theme.colors.surface);
+      setTextColor(theme.colors.text);
+      setAccent(theme.colors.accent);
+    }
   };
 
   return (
@@ -87,7 +89,9 @@ export default function Settings() {
               flex: 1,
               padding: 10,
               backgroundColor:
-                themeMode === modeOption ? accentColor : theme.colors.surface,
+                themeMode === modeOption
+                  ? theme.colors.text
+                  : theme.colors.surface,
               borderRadius: 8,
               alignItems: "center",
             }}
@@ -170,11 +174,11 @@ export default function Settings() {
             style={{
               marginTop: 20,
               padding: 12,
-              backgroundColor: accentColor,
+              backgroundColor: theme.colors.text,
               borderRadius: 10,
             }}
           >
-            <Text style={{ color: "#fff", textAlign: "center" }}>
+            <Text style={{ color: theme.colors.surface, textAlign: "center" }}>
               Apply Custom Theme
             </Text>
           </TouchableOpacity>
@@ -219,11 +223,7 @@ function ColorInput({
           onPress={() => setModalVisible(true)}
           style={{ marginLeft: 8 }}
         >
-          <Ionicons
-            name="color-palette"
-            size={24}
-            color={theme.colors.primary}
-          />
+          <Ionicons name="color-palette" size={24} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -262,13 +262,16 @@ function ColorInput({
             <TouchableOpacity
               onPress={() => setModalVisible(false)}
               style={{
-                backgroundColor: theme.colors.primary,
+                backgroundColor: theme.colors.text,
                 padding: 10,
                 borderRadius: 8,
-                marginTop: 12,
               }}
             >
-              <Text style={{ color: "#fff", textAlign: "center" }}>Done</Text>
+              <Text
+                style={{ color: theme.colors.surface, textAlign: "center" }}
+              >
+                Done
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
