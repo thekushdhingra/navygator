@@ -15,7 +15,7 @@ type CustomTheme = {
   text?: string;
 };
 
-type Theme = {
+export type Theme = {
   dark: boolean;
   colors: {
     primary: string;
@@ -48,7 +48,7 @@ const Dark: Theme = {
   colors: {
     primary: "#000000ff",
     background: "#000000ff",
-    surface: "#161616ff",
+    surface: "#101010ff",
     text: "#e0e7ff",
     surfaceVariant: "#2e3440",
     onSurface: "#e0e7ff",

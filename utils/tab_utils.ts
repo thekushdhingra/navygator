@@ -53,3 +53,42 @@ export async function getSelectedTabId(): Promise<number> {
     return 1;
   }
 }
+
+const ASYNC_STORAGE_TABS_KEY = "guest_tabs";
+const ASYNC_STORAGE_SELECTED_TAB_KEY = "guest_selected_tab";
+
+export async function getGuestTabsFromStorage(): Promise<Tab[]> {
+  const tabsStr = await AsyncStorage.getItem(ASYNC_STORAGE_TABS_KEY);
+  return tabsStr ? JSON.parse(tabsStr) : [];
+}
+
+export async function setGuestTabsToStorage(tabs: Tab[]) {
+  await AsyncStorage.setItem(ASYNC_STORAGE_TABS_KEY, JSON.stringify(tabs));
+}
+
+export async function getGuestSelectedTabId(): Promise<number | null> {
+  const idStr = await AsyncStorage.getItem(ASYNC_STORAGE_SELECTED_TAB_KEY);
+  return idStr ? Number(idStr) : null;
+}
+
+export async function setGuestSelectedTabId(id: number) {
+  await AsyncStorage.setItem(ASYNC_STORAGE_SELECTED_TAB_KEY, id.toString());
+}
+
+export async function addGuestTab(tab: Tab) {
+  const tabs = await getGuestTabsFromStorage();
+  tabs.push(tab);
+  await setGuestTabsToStorage(tabs);
+  await setGuestSelectedTabId(tab.id);
+}
+
+export async function closeGuestTab(tabId: number) {
+  let tabs = await getGuestTabsFromStorage();
+  tabs = tabs.filter((tab) => tab.id !== tabId);
+  await setGuestTabsToStorage(tabs);
+  if (tabs.length > 0) {
+    await setGuestSelectedTabId(tabs[0].id);
+  } else {
+    await AsyncStorage.removeItem(ASYNC_STORAGE_SELECTED_TAB_KEY);
+  }
+}

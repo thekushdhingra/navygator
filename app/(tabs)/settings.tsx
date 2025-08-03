@@ -1,8 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Entypo, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  Modal,
+  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -51,6 +51,9 @@ export default function Settings() {
 
   return (
     <ScrollView
+    contentContainerStyle={{
+      paddingBottom: 400,
+    }}
       style={{
         flex: 1,
         backgroundColor: theme.colors.background,
@@ -184,7 +187,83 @@ export default function Settings() {
           </TouchableOpacity>
         </>
       )}
+      <CookieButton />
     </ScrollView>
+  );
+}
+
+function CookieButton() {
+  const [clicked, setClicked] = useState();
+  const { theme } = useAppTheme();
+  return (
+    <View
+      style={{
+        display: "flex",
+        flex: 0,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {clicked ? (
+        <View>
+          <Pressable
+            style={{
+              backgroundColor: theme.colors.background,
+              flex: 0,
+              padding: 10,
+              borderRadius: 10,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.text,
+              }}
+            >
+              No
+            </Text>
+          </Pressable>
+          <Pressable
+            style={{
+              backgroundColor: theme.colors.text,
+              flex: 0,
+              padding: 10,
+              borderRadius: 10,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.background,
+              }}
+            >
+              <Entypo
+                name="database"
+                color={theme.colors.background}
+                size={20}
+              />{" "}
+              Yes
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          style={{
+            backgroundColor: theme.colors.text,
+            flex: 0,
+            padding: 10,
+            borderRadius: 10,
+          }}
+        >
+          <Text
+            style={{
+              color: theme.colors.background,
+            }}
+          >
+            <Entypo name="database" color={theme.colors.background} size={20} />{" "}
+            Clear Website Data
+          </Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -198,7 +277,6 @@ function ColorInput({
   onChange: (v: string) => void;
 }) {
   const { theme } = useAppTheme();
-  const [modalVisible, setModalVisible] = useState(false);
 
   return (
     <View>
@@ -219,63 +297,7 @@ function ColorInput({
             color: theme.colors.onSurface,
           }}
         />
-        <TouchableOpacity
-          onPress={() => setModalVisible(true)}
-          style={{ marginLeft: 8 }}
-        >
-          <Ionicons name="color-palette" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
       </View>
-
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.surface,
-              padding: 20,
-              borderRadius: 12,
-              width: "80%",
-            }}
-          >
-            <ColorPicker
-              color={value}
-              onColorChange={onChange}
-              thumbSize={40}
-              sliderSize={40}
-              noSnap
-              row={false}
-              useNativeDriver={false}
-            />
-
-            <TouchableOpacity
-              onPress={() => setModalVisible(false)}
-              style={{
-                backgroundColor: theme.colors.text,
-                padding: 10,
-                borderRadius: 8,
-              }}
-            >
-              <Text
-                style={{ color: theme.colors.surface, textAlign: "center" }}
-              >
-                Done
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

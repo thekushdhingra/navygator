@@ -3,7 +3,6 @@
     "name": "navygator",
     "slug": "navygator",
     "version": "1.0.0",
-    "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "navygator",
     "userInterfaceStyle": "automatic",
@@ -14,9 +13,19 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permission": [
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.media.action.IMAGE_CAPTURE"
+      ],
+      "package": "dev.kushs.navygator"
+    },
+    "build": {
+      "android": {
+        "buildType": "apk"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +46,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4bdb58a0-f0a2-4af1-8f2f-1e1eed14471f"
+      }
+    },
+    "owner": "kushd"
   }
 }
