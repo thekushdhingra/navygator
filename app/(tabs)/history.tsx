@@ -24,10 +24,16 @@ export default function HistoryTab() {
 
   async function historyHandler() {
     try {
-      const historyData = await getHistory(auth.currentUser?.email);
-      setHistory(historyData);
+      if (!auth.currentUser?.email) {
+        console.error("No authenticated user or email found");
+        setHistory([]);
+        return;
+      }
+      const historyData = await getHistory(auth.currentUser.email);
+      setHistory(historyData || []);
     } catch (error) {
       console.error("Error fetching history:", error);
+      setHistory([]);
     } finally {
       setLoading(false);
     }

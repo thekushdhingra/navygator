@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export type Tab = {
   id: number;
   url: string;
+  incognito?: boolean;
 };
 
 const TABS_KEY = "TABS";
@@ -62,7 +63,7 @@ export async function getGuestTabsFromStorage(): Promise<Tab[]> {
   return tabsStr ? JSON.parse(tabsStr) : [];
 }
 
-export async function setGuestTabsToStorage(tabs: Tab[]) {
+export async function saveGuestTabsToStorage(tabs: Tab[]) {
   await AsyncStorage.setItem(ASYNC_STORAGE_TABS_KEY, JSON.stringify(tabs));
 }
 
@@ -78,14 +79,14 @@ export async function setGuestSelectedTabId(id: number) {
 export async function addGuestTab(tab: Tab) {
   const tabs = await getGuestTabsFromStorage();
   tabs.push(tab);
-  await setGuestTabsToStorage(tabs);
+  await saveGuestTabsToStorage(tabs);
   await setGuestSelectedTabId(tab.id);
 }
 
 export async function closeGuestTab(tabId: number) {
   let tabs = await getGuestTabsFromStorage();
   tabs = tabs.filter((tab) => tab.id !== tabId);
-  await setGuestTabsToStorage(tabs);
+  await saveGuestTabsToStorage(tabs);
   if (tabs.length > 0) {
     await setGuestSelectedTabId(tabs[0].id);
   } else {

@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  orderBy,
   query,
   setDoc,
   Timestamp,
@@ -21,6 +22,11 @@ import {
   where,
 } from "firebase/firestore";
 
+function getSafeDocID(email: string, url: string): string {
+  const raw = `${email}_${url}`;
+  const base64 = Buffer.from(raw).toString("base64");
+  return base64.replace(/[\/+#=]/g, "_");
+}
 const firebaseConfig = {
   apiKey: "AIzaSyCIM4BoFrQ2A9R1tBE0bENI0ikbQ6YV1nw",
   authDomain: "navygator-browser.firebaseapp.com",
@@ -65,14 +71,11 @@ async function createHistory(
   url: string,
   email: string
 ): Promise<History | null> {
-  if (!email || !url || email.length === 0 || url.length === 0) {
-    return null;
-  }
-  // Create a deterministic document ID (e.g., hash of email and url)
-  const docId = `${email}_${url.replace(/[^a-zA-Z0-9]/g, "_")}`; // Sanitize URL for Firestore ID
+  if (!email || !url || email.length === 0 || url.length === 0) return null;
+
+  const docId = getSafeDocID(email, url);
   const historyRef = doc(db, "history", docId);
 
-  // Use setDoc with merge: false to ensure no overwrite if it exists
   try {
     const history: History = { url, email, createdAt: Timestamp.now() };
     await setDoc(historyRef, history, { merge: false });
@@ -91,19 +94,19 @@ async function getHistory(
   url?: string
 ): Promise<History[] | null> {
   if (url) {
-    const docId = `${email}_${url.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const docId = getSafeDocID(email, url);
     const docRef = doc(db, "history", docId);
     const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) {
-      return null;
-    }
+    if (!docSnap.exists()) return null;
     return [docSnap.data() as History];
   } else {
-    const q = query(collection(db, "history"), where("email", "==", email));
+    const q = query(
+      collection(db, "history"),
+      where("email", "==", email),
+      orderBy("createdAt")
+    );
     const querySnapshot = await getDocs(q);
-    if (querySnapshot.docs.length === 0) {
-      return null;
-    }
+    if (querySnapshot.docs.length === 0) return null;
     return querySnapshot.docs.map((doc) => doc.data() as History);
   }
 }
@@ -119,6 +122,7 @@ async function deleteHistory(email: string, url: string) {
   const deletePromises = querySnapshot.docs.map((doc) => deleteDoc(doc.ref));
   await Promise.all(deletePromises);
 }
+
 async function chatwithAI(
   prompt: string,
   email: string,
@@ -163,34 +167,29 @@ async function getChatsByEmail(email: string): Promise<ChatData[]> {
   try {
     const q = query(collection(db, "chats"), where("email", "==", email));
     const snapshot = await getDocs(q);
-
-    const chats: ChatData[] = snapshot.docs.map((doc) => ({
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...(doc.data() as ChatData),
     }));
-
-    return chats;
   } catch (err) {
     console.error("Error fetching chats:", err);
     return [];
   }
 }
+
 async function getChats(chatID: string): Promise<ChatData | null> {
   try {
     const docRef = doc(db, "chats", chatID);
     const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...(docSnap.data() as ChatData) };
-    } else {
-      console.warn("No chat found with ID:", chatID);
-      return null;
-    }
+    return docSnap.exists()
+      ? { id: docSnap.id, ...(docSnap.data() as ChatData) }
+      : null;
   } catch (err) {
     console.error("Error fetching chat:", err);
     return null;
   }
 }
+
 async function deleteChats(chatID: string) {
   try {
     const docRef = doc(db, "chats", chatID);
@@ -199,6 +198,7 @@ async function deleteChats(chatID: string) {
     console.error("Error deleting chat: ", err);
   }
 }
+
 export {
   app,
   auth,

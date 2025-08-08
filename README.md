@@ -14,12 +14,9 @@ Browse the web in style with smart summarization, multi-tab support, synced hist
   Tab everything. Switch, close, open — like desktop, but pocket-sized.
 
 - 📜 **History Syncing**  
-  Local-first and private. Revisit anything anytime.
+  Make an account for the cloud sync!
 
 - 🎨 **Custom Themes**  
   Match your energy: light, dark, AMOLED black, or your own chaotic aesthetic.
-
-- ⚡ **Fast and Smooth**  
-  Powered by WebView, glides like butter on both Android and iOS.
 
 ---

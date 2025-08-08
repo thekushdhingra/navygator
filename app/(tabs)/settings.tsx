@@ -51,9 +51,9 @@ export default function Settings() {
 
   return (
     <ScrollView
-    contentContainerStyle={{
-      paddingBottom: 400,
-    }}
+      contentContainerStyle={{
+        paddingBottom: 400,
+      }}
       style={{
         flex: 1,
         backgroundColor: theme.colors.background,
@@ -193,7 +193,7 @@ export default function Settings() {
 }
 
 function CookieButton() {
-  const [clicked, setClicked] = useState();
+  const [clicked, setClicked] = useState<boolean>(false);
   const { theme } = useAppTheme();
   return (
     <View
@@ -218,6 +218,9 @@ function CookieButton() {
               style={{
                 color: theme.colors.text,
               }}
+              onPress={() => {
+                setClicked(false);
+              }}
             >
               No
             </Text>
@@ -235,11 +238,6 @@ function CookieButton() {
                 color: theme.colors.background,
               }}
             >
-              <Entypo
-                name="database"
-                color={theme.colors.background}
-                size={20}
-              />{" "}
               Yes
             </Text>
           </Pressable>
@@ -256,6 +254,9 @@ function CookieButton() {
           <Text
             style={{
               color: theme.colors.background,
+            }}
+            onPress={() => {
+              setClicked(true);
             }}
           >
             <Entypo name="database" color={theme.colors.background} size={20} />{" "}

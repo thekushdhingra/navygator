@@ -1,11 +1,13 @@
 import FaviconOrFallback from "@/components/favicon";
 import { AntDesign, Entypo, Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { Buffer } from "buffer";
+import { Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -15,7 +17,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Menu, Provider } from "react-native-paper";
+import { ActivityIndicator, Menu, Provider } from "react-native-paper";
 import { WebView } from "react-native-webview";
 import * as firebase from "../../utils/firebaseHandler";
 import {
@@ -27,12 +29,14 @@ import {
   getGuestTabsFromStorage,
   getSelectedTabId,
   getTabsFromStorage,
+  saveGuestTabsToStorage,
+  saveTabsToStorage,
   setGuestSelectedTabId,
-  setGuestTabsToStorage,
   setSelectedTabId,
   Tab,
 } from "../../utils/tab_utils";
 import { useAppTheme } from "../../utils/theme-context";
+global.Buffer = Buffer;
 
 export default function Home() {
   const router = useRouter();
@@ -42,10 +46,11 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [selectedTabId, setSelectedTabIdState] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [selectedText, setSelectedText] = useState<string | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [menuVisible, setMenuVisible] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isBlocking, setisBlocking] = useState<boolean>(false);
   const [windowDims, setWindowDims] = useState<{
     width: number;
     height: number;
@@ -53,88 +58,89 @@ export default function Home() {
     width: Dimensions.get("screen").width,
     height: Dimensions.get("screen").height,
   });
+
   const [isGuest, setIsGuest] = useState(false);
 
-  useEffect(() => {
-    if (firebase.auth.currentUser && firebase.auth.currentUser.email) {
-      for (let i = 0; i < tabs.length; i++) {
-        const tab = tabs[i];
-        firebase.createHistory(firebase.auth.currentUser.email, tab.url);
-        console.log(`${i + 1}) id: ${tab.id} and url: ${tab.url}`);
-      }
+  const safeNavigate = async (path: Href) => {
+    if (isGuest) {
+      await saveGuestTabsToStorage(tabs);
+      await setGuestSelectedTabId(selectedTabId);
+    } else if (firebase.auth.currentUser?.email) {
+      await saveTabsToStorage(tabs);
+      await setSelectedTabId(selectedTabId);
     }
-  }, [tabs]);
+    router.push(path);
+  };
 
-  useEffect(() => {
-    (async () => {
-      setIsLoading(true);
-      let loadedTabs: Tab[] = [];
-      const currentUser = await firebase.auth.authStateReady();
-      setIsGuest(currentUser === null);
-      let selectedId: number | null = null;
+  const loadTabs = useCallback(async () => {
+    setIsLoading(true);
+    const currentUser = await firebase.auth.authStateReady();
+    const guest = currentUser === null;
+    setIsGuest(guest);
 
-      if (firebase.auth?.currentUser) {
-        loadedTabs = await getTabsFromStorage();
-        selectedId = await getSelectedTabId();
+    let loadedTabs: Tab[] = [];
+    let selectedId: number | null = null;
+
+    loadedTabs = guest
+      ? await getGuestTabsFromStorage()
+      : await getTabsFromStorage();
+    selectedId = guest
+      ? await getGuestSelectedTabId()
+      : await getSelectedTabId();
+
+    if (loadedTabs.length === 0) {
+      const newTab = { id: Date.now(), url: "https://www.google.com" };
+      if (guest) {
+        await addGuestTab(newTab);
       } else {
-        // Guest mode
-        setIsGuest(true);
-        loadedTabs = await getGuestTabsFromStorage();
-        selectedId = await getGuestSelectedTabId();
+        await addTab(newTab);
       }
+      loadedTabs = [newTab];
+      selectedId = newTab.id;
+    }
 
-      if (loadedTabs.length === 0) {
-        const newTab = { id: Date.now(), url: "https://www.google.com" };
-        if (isGuest || !firebase.auth?.currentUser) {
-          await addGuestTab(newTab);
-        } else {
-          await addTab(newTab);
-        }
-        loadedTabs = [newTab];
-        selectedId = newTab.id;
-        if (isGuest || !firebase.auth?.currentUser) {
-          await setGuestSelectedTabId(newTab.id);
-        } else {
-          await setSelectedTabId(newTab.id);
-        }
-        setInput(newTab.url);
-      } else if (selectedId !== null) {
-        const selectedTab = loadedTabs.find((tab) => tab.id === selectedId);
-        if (selectedTab) {
-          setInput(selectedTab.url);
-        } else {
-          selectedId = loadedTabs[0].id;
-          if (isGuest || !firebase.auth?.currentUser) {
-            await setGuestSelectedTabId(loadedTabs[0].id);
-          } else {
-            await setSelectedTabId(loadedTabs[0].id);
-          }
-          setInput(loadedTabs[0].url);
-        }
-      } else {
-        selectedId = loadedTabs[0].id;
-        if (isGuest || !firebase.auth?.currentUser) {
-          await setGuestSelectedTabId(loadedTabs[0].id);
-        } else {
-          await setSelectedTabId(loadedTabs[0].id);
-        }
-        setInput(loadedTabs[0].url);
-      }
-
-      setTabs(loadedTabs);
-      setSelectedTabIdState(selectedId);
-      setIsLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const selectedTab = loadedTabs.find((tab) => tab.id === selectedId);
+    setTabs(loadedTabs);
+    setSelectedTabIdState(selectedId);
+    setInput(selectedTab?.url ?? "https://www.google.com");
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    const dims = Dimensions.get("screen");
-    setWindowDims({ width: dims.width, height: dims.height });
-    Dimensions.addEventListener("change", () => {
+    loadTabs();
+  }, [loadTabs]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTabs();
+    }, [loadTabs])
+  );
+
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    if (isGuest) {
+      saveGuestTabsToStorage(tabs);
+    } else if (firebase.auth.currentUser?.email) {
+      tabs.forEach(async (tab, index) => {
+        const history = firebase.createHistory(
+          tab.url,
+          firebase.auth.currentUser.email
+        );
+        console.log(history);
+        console.log(`${index + 1}) id: ${tab.id} and url: ${tab.url}`);
+      });
+      saveTabsToStorage(tabs);
+    }
+  }, [tabs, isGuest]);
+
+  useEffect(() => {
+    const updateDims = () => {
       const dims = Dimensions.get("screen");
       setWindowDims({ width: dims.width, height: dims.height });
-    });
+    };
+    updateDims();
+    const subscription = Dimensions.addEventListener("change", updateDims);
+    return () => subscription?.remove();
   }, []);
 
   const handleGo = async () => {
@@ -151,12 +157,11 @@ export default function Home() {
         tab.id === selectedTabId ? { ...tab, url: formattedUrl } : tab
       );
       setTabs(updatedTabs);
-
-      if (isGuest || !firebase.auth?.currentUser) {
-        await setGuestTabsToStorage(updatedTabs);
-      } else {
+      if (isGuest) {
+        await saveGuestTabsToStorage(updatedTabs);
+      } else if (firebase.auth.currentUser?.email) {
+        await saveTabsToStorage(updatedTabs);
       }
-
       webviewRef.current?.injectJavaScript(
         `window.location.href = "${formattedUrl}";`
       );
@@ -170,7 +175,6 @@ export default function Home() {
   };
 
   if (isGuest) {
-    // GUEST MODE UI
     return (
       <Provider>
         <SafeAreaView
@@ -182,11 +186,7 @@ export default function Home() {
             padding: 20,
           }}
         >
-          <View
-            style={{
-              filter: theme.dark ? "" : "invert(1)",
-            }}
-          >
+          <View style={{ filter: theme.dark ? "" : "invert(1)" }}>
             <Image
               style={{ width: 200, height: 200, marginBottom: 24 }}
               source={require("../../assets/images/icon.png")}
@@ -223,7 +223,7 @@ export default function Home() {
               borderRadius: 8,
               marginBottom: 16,
             }}
-            onPress={() => router.push("/login")}
+            onPress={() => safeNavigate("/login")}
           >
             <Text
               style={{
@@ -235,7 +235,12 @@ export default function Home() {
               Sign In
             </Text>
           </Pressable>
-          <Pressable onPress={() => setIsGuest(false)}>
+          <Pressable
+            onPress={async () => {
+              setIsGuest(false);
+              await loadTabs();
+            }}
+          >
             <Text
               style={{
                 color: theme.colors.text,
@@ -251,16 +256,74 @@ export default function Home() {
     );
   }
 
-  // --- MAIN APP ---
   return (
     <Provider>
       <SafeAreaView
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       >
+        {isBlocking && (
+          <Modal transparent animationType="fade" visible>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.4)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  padding: 20,
+                  backgroundColor: theme.colors.surface,
+                  borderRadius: 12,
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text
+                  style={{
+                    marginTop: 12,
+                    color: theme.colors.text,
+                    fontSize: 16,
+                    fontWeight: "500",
+                  }}
+                >
+                  Getting things ready for you!
+                </Text>
+              </View>
+            </View>
+          </Modal>
+        )}
         <View
-          style={[styles.navBar, { backgroundColor: theme.colors.background }]}
+          style={[
+            styles.navBar,
+            {
+              backgroundColor: theme.colors.background,
+            },
+          ]}
         >
-          <Pressable onPress={() => handleGo()}>
+          <Pressable
+            onPress={async () => {
+              const selectedTab = tabs.find((tab) => tab.id === selectedTabId);
+              if (selectedTab && selectedTabId !== null) {
+                const updatedTabs = tabs.map((tab) =>
+                  tab.id === selectedTabId
+                    ? { ...tab, url: "https://www.google.com" }
+                    : tab
+                );
+                setTabs(updatedTabs);
+                setInput("https://www.google.com");
+                if (isGuest) {
+                  await saveGuestTabsToStorage(updatedTabs);
+                } else if (firebase.auth.currentUser?.email) {
+                  await saveTabsToStorage(updatedTabs);
+                }
+                webviewRef.current?.injectJavaScript(
+                  `window.location.href = "https://www.google.com";`
+                );
+              }
+            }}
+          >
             <AntDesign name="home" size={24} color={theme.colors.onSurface} />
           </Pressable>
           <View
@@ -293,29 +356,23 @@ export default function Home() {
           </View>
           {tabsMenuShown && (
             <Pressable
-              style={{
-                marginHorizontal: 10,
-              }}
+              style={{ marginHorizontal: 10 }}
               onPress={async () => {
                 const newTab = {
                   id: Date.now(),
                   url: "https://www.google.com",
                 };
-                if (isGuest || !firebase.auth?.currentUser) {
+                setTabs([...tabs, newTab]);
+                setSelectedTabIdState(newTab.id);
+                setInput(newTab.url);
+                if (isGuest) {
                   await addGuestTab(newTab);
-                  const tabsFetched = await getGuestTabsFromStorage();
-                  setTabs(tabsFetched);
                 } else {
                   await addTab(newTab);
-                  const tabsFetched = await getTabsFromStorage();
-                  setTabs(tabsFetched);
                 }
-                await setSelectedTabId(newTab.id);
               }}
             >
-              <Text>
-                <Entypo name="plus" color={theme.colors.text} size={30} />
-              </Text>
+              <Entypo name="plus" color={theme.colors.text} size={30} />
             </Pressable>
           )}
           <Pressable
@@ -342,40 +399,33 @@ export default function Home() {
           </Pressable>
           {selectedText && (
             <Pressable
-              style={{
-                marginHorizontal: 0,
-              }}
+              style={{ marginHorizontal: 0 }}
               onPress={async () => {
-                const chat = await firebase.chatwithAI(
-                  "Summarise this: " + selectedText,
-                  firebase.auth.currentUser.email
-                );
-                await AsyncStorage.setItem("openChatID", chat.id);
-                router.push({
-                  pathname: "/chatbot",
-                  params: {
-                    chatID: chat.id,
-                  },
-                });
+                if (firebase.auth.currentUser?.email) {
+                  setisBlocking(true);
+                  const chat = await firebase.chatwithAI(
+                    "Summarise this: " + selectedText,
+                    firebase.auth.currentUser.email
+                  );
+                  await AsyncStorage.setItem("openChatID", chat.id);
+                  router.push({
+                    pathname: "/chatbot",
+                    params: { chatID: chat.id },
+                  });
+                }
               }}
             >
-              <Text>
-                <Ionicons
-                  name="sparkles-outline"
-                  size={20}
-                  color={theme.colors.text}
-                />
-              </Text>
+              <Ionicons
+                name="sparkles-outline"
+                size={20}
+                color={theme.colors.text}
+              />
             </Pressable>
           )}
           <Menu
             visible={menuVisible}
             theme={{
-              colors: {
-                elevation: {
-                  level2: theme.colors.background,
-                },
-              },
+              colors: { elevation: { level2: theme.colors.background } },
             }}
             onDismiss={() => setMenuVisible(false)}
             anchor={
@@ -390,55 +440,46 @@ export default function Home() {
           >
             {!firebase.auth.currentUser && (
               <Menu.Item
-                onPress={() => router.push("/login")}
+                onPress={() => safeNavigate("/login")}
                 title="Sign In"
                 leadingIcon="account-plus-outline"
-                titleStyle={{
-                  color: theme.colors.text,
-                }}
-              />
-            )}
-            {firebase.auth.currentUser && (
-              <Menu.Item
-                title="Sign Out"
-                titleStyle={{
-                  color: theme.colors.text,
-                }}
-                leadingIcon="exit-to-app"
-                onPress={async function () {
-                  await firebase.auth.signOut();
-                  setIsGuest(true);
-                }}
+                titleStyle={{ color: theme.colors.text }}
               />
             )}
             {!isGuest && firebase.auth.currentUser && (
               <Menu.Item
-                onPress={() => router.push("/history")}
+                onPress={() => safeNavigate("/history")}
                 title="History"
                 leadingIcon="history"
-                titleStyle={{
-                  color: theme.colors.text,
-                }}
+                titleStyle={{ color: theme.colors.text }}
               />
             )}
             {!isGuest && firebase.auth.currentUser && (
               <Menu.Item
-                onPress={() => router.push("/chatlist")}
+                onPress={() => safeNavigate("/chatlist")}
                 title="Chat with AI"
                 leadingIcon="robot"
-                titleStyle={{
-                  color: theme.colors.text,
-                }}
+                titleStyle={{ color: theme.colors.text }}
               />
             )}
             <Menu.Item
-              onPress={() => router.push("/settings")}
+              onPress={() => safeNavigate("/settings")}
               title="Settings"
-              titleStyle={{
-                color: theme.colors.text,
-              }}
+              titleStyle={{ color: theme.colors.text }}
               leadingIcon="cog-outline"
             />
+            {firebase.auth.currentUser && (
+              <Menu.Item
+                title="Sign Out"
+                titleStyle={{ color: theme.colors.text }}
+                leadingIcon="exit-to-app"
+                onPress={async () => {
+                  await firebase.auth.signOut();
+                  setIsGuest(true);
+                  await loadTabs();
+                }}
+              />
+            )}
           </Menu>
         </View>
         {isLoading ? (
@@ -456,7 +497,7 @@ export default function Home() {
               flexDirection: "row",
               flexWrap: "wrap",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "space-between",
               gap: 8,
               width: windowDims.width,
               height: windowDims.height,
@@ -475,20 +516,18 @@ export default function Home() {
                     ? windowDims.width / 2.15
                     : windowDims.width,
                   overflow: "scroll",
-                  display: !tabsMenuShown
-                    ? tab.id === selectedTabId
-                      ? "flex"
-                      : "none"
-                    : "flex",
+                  display:
+                    tab.id === selectedTabId || tabsMenuShown ? "flex" : "none",
                 }}
                 onPress={async () => {
-                  if (isGuest || !firebase.auth?.currentUser) {
+                  setSelectedTabIdState(tab.id);
+                  setTabsMenuShown(false);
+                  setInput(tab.url);
+                  if (isGuest) {
                     await setGuestSelectedTabId(tab.id);
                   } else {
                     await setSelectedTabId(tab.id);
                   }
-                  setSelectedTabIdState(tab.id);
-                  setTabsMenuShown(false);
                 }}
               >
                 <View
@@ -504,7 +543,6 @@ export default function Home() {
                       : windowDims.height,
                   }}
                 >
-                  {/* Tab Controls */}
                   {tabsMenuShown && (
                     <View
                       style={{
@@ -514,7 +552,7 @@ export default function Home() {
                           ? windowDims.width / 2.15
                           : windowDims.width,
                         flexDirection: "row",
-                        justifyContent: "flex-start",
+                        justifyContent: "space-between",
                         padding: 10,
                         borderTopLeftRadius: 8,
                         borderTopRightRadius: 8,
@@ -529,11 +567,7 @@ export default function Home() {
                         }}
                       >
                         <FaviconOrFallback url={tab.url} />
-                        <Text
-                          style={{
-                            color: theme.colors.onSurface,
-                          }}
-                        >
+                        <Text style={{ color: theme.colors.onSurface }}>
                           {tab.url
                             ? new URL(tab.url).hostname
                                 .split(".")
@@ -549,87 +583,178 @@ export default function Home() {
                         </Text>
                       </View>
                       <Pressable
-                        style={{ flex: 1 }}
-                        onPress={async function () {
-                          if (isGuest || !firebase.auth?.currentUser) {
-                            await closeGuestTab(tab.id);
-                            const tabsFetched = await getGuestTabsFromStorage();
-                            setTabs(tabsFetched);
+                        style={{
+                          flex: 1,
+                          justifyContent: "flex-end",
+                          alignItems: "flex-end",
+                        }}
+                        onPress={async () => {
+                          const updatedTabs = tabs.filter(
+                            (t) => t.id !== tab.id
+                          );
+                          setTabs(updatedTabs);
+                          if (updatedTabs.length > 0) {
+                            setSelectedTabIdState(updatedTabs[0].id);
+                            setInput(updatedTabs[0].url);
+                            if (isGuest) {
+                              await closeGuestTab(tab.id);
+                              await setGuestSelectedTabId(updatedTabs[0].id);
+                            } else {
+                              await closeTab(tab.id);
+                              await setSelectedTabId(updatedTabs[0].id);
+                            }
                           } else {
-                            await closeTab(tab.id);
-                            const tabsFetched = await getTabsFromStorage();
-                            setTabs(tabsFetched);
+                            setSelectedTabIdState(null);
+                            setInput("https://www.google.com");
+                            if (isGuest) {
+                              await closeGuestTab(tab.id);
+                            } else {
+                              await closeTab(tab.id);
+                            }
                           }
                         }}
                       >
-                        <Text
-                          style={{
-                            color: theme.colors.onSurface,
-                            textAlign: "right",
-                          }}
-                        >
-                          <Entypo
-                            name="cross"
-                            size={20}
-                            color={theme.colors.onSurface}
-                          />
-                        </Text>
+                        <Entypo
+                          name="cross"
+                          size={20}
+                          color={theme.colors.onSurface}
+                        />
                       </Pressable>
                     </View>
                   )}
-                  {/* WebView */}
                   <View
                     style={{
-                      flex: 1,
+                      height: windowDims.height,
                       width: tabsMenuShown
                         ? windowDims.width / 2.15
                         : windowDims.width,
+                      transitionProperty: "",
                       overflow: tabsMenuShown ? "hidden" : "scroll",
                       borderBottomLeftRadius: tabsMenuShown ? 8 : 0,
                       borderBottomRightRadius: tabsMenuShown ? 8 : 0,
                     }}
+                    pointerEvents={tabsMenuShown ? "none" : "auto"}
                   >
                     <WebView
+                      allowsInlineMediaPlayback
+                      allowsFullscreenVideo
+                      allowFileAccessFromFileURLs
+                      allowFileAccess
+                      menuItems={[
+                        {
+                          label: "Summarise",
+                          key: "summarise",
+                        },
+                      ]}
+                      onCustomMenuSelection={(webviewEvent) => {
+                        const { key } = webviewEvent.nativeEvent;
+                        if (key === "summarise") {
+                          (async () => {
+                            if (firebase.auth.currentUser?.email) {
+                              setisBlocking(true);
+                              const chat = await firebase.chatwithAI(
+                                "Summarise this: " + selectedText,
+                                firebase.auth.currentUser.email
+                              );
+                              await AsyncStorage.setItem("openChatID", chat.id);
+                              router.push({
+                                pathname: "/chatbot",
+                                params: { chatID: chat.id },
+                              });
+                            }
+                          })();
+                        }
+                      }}
+                      style={{
+                        borderBottomLeftRadius: tabsMenuShown ? 8 : 0,
+                        borderBottomRightRadius: tabsMenuShown ? 8 : 0,
+                      }}
                       injectedJavaScript={`
-                        let lastSelection = null;
-                        document.addEventListener("selectionchange", () => {
-                          const selection = window.getSelection().toString();
-                          const text = selection.length > 0 ? selection : null;
-                          if (text !== lastSelection) {
-                            lastSelection = text;
-                            window.ReactNativeWebView.postMessage(JSON.stringify({
-                              type: "selectedtext",
-                              text
-                            }));
-                          }
-                        });
-                        true;
-                      `}
+  (function() {
+    // ✅ Text selection tracker
+    let lastSelection = null;
+    document.addEventListener("selectionchange", () => {
+      const selection = window.getSelection().toString();
+      const text = selection.length > 0 ? selection : null;
+      if (text !== lastSelection) {
+        lastSelection = text;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: "selectedtext",
+          text
+        }));
+      }
+    });
+
+    // ✅ Ad blocker
+    const adSelectors = [
+      'iframe[src*="ads"]',
+      '[id^="ad-"]',
+      '[class*="ad-"]',
+      '[class^="ads"]',
+      'script[src*="doubleclick"]',
+      'script[src*="googlesyndication"]',
+      'div[id*="sponsor"]',
+      'div[class*="ad"]',
+    ];
+
+    function removeAds() {
+      adSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => el.remove());
+      });
+    }
+
+    const observer = new MutationObserver(removeAds);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    removeAds();
+  })();
+  true;
+`}
+                      onShouldStartLoadWithRequest={(request) => {
+                        if (tab.id === selectedTabId) {
+                          setTabs((prevTabs) => {
+                            const updated = prevTabs.map((t) =>
+                              t.id === tab.id ? { ...t, url: request.url } : t
+                            );
+                            if (isGuest) {
+                              saveGuestTabsToStorage(updated);
+                            } else if (firebase.auth.currentUser?.email) {
+                              saveTabsToStorage(updated);
+                            }
+                            return updated;
+                          });
+                          setInput(request.url);
+                        }
+                        return true;
+                      }}
                       ref={webviewRef}
                       onMessage={({ nativeEvent }) => {
-                        const data = JSON.parse(nativeEvent.data);
-                        console.log(data);
-                        if (data.type && data.type === "selectedtext") {
-                          setSelectedText(data.text || null);
+                        try {
+                          const data = JSON.parse(nativeEvent.data);
+                          if (data.type === "selectedtext") {
+                            setSelectedText(data.text || null);
+                          }
+                        } catch (e) {
+                          console.error("Error parsing WebView message:", e);
                         }
                       }}
                       source={{ uri: tab.url }}
                       scrollEnabled={!tabsMenuShown}
                       nestedScrollEnabled={!tabsMenuShown}
-                      onNavigationStateChange={async (navState) => {
+                      onNavigationStateChange={(navState) => {
                         if (tab.id === selectedTabId) {
                           setInput(navState.url);
                           setTabs((prevTabs) => {
                             const updated = prevTabs.map((t) =>
                               t.id === tab.id ? { ...t, url: navState.url } : t
                             );
-                            if (!firebase.auth?.currentUser) {
-                              setGuestTabsToStorage(updated);
-                            } else {
-                              firebase.createHistory(
-                                tab.url,
-                                firebase.auth.currentUser.email
-                              );
+                            if (isGuest) {
+                              saveGuestTabsToStorage(updated);
+                            } else if (firebase.auth.currentUser?.email) {
+                              saveTabsToStorage(updated);
                             }
                             return updated;
                           });
